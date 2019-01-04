@@ -1,0 +1,87 @@
+# Please edit the object below. Lines beginning with a '#' will be ignored,
+# and an empty file will abort the edit. If an error occurs while saving this file will be
+# reopened with the relevant failures.
+#
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: jenkins
+  name: jenkins
+  namespace: cicd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: jenkins
+  template:
+    metadata:
+      labels:
+        name: jenkins
+    spec:
+      containers:
+        - env:
+          image: jenkins:docker
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 2
+            httpGet:
+              path: /login
+              port: 8080
+              scheme: HTTP
+          name: jenkins
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+              scheme: HTTP
+          volumeMounts:
+            - mountPath: /var/jenkins_home/
+              name: jenkins-data
+            - name: dockersock
+              mountPath: "/var/run/docker.sock"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext:
+        runAsUser: 0
+      serviceAccount: jenkins
+      serviceAccountName: jenkins
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: jenkins-data
+          hostPath:
+            path: /jenkins-data
+            type: DirectoryOrCreate
+        - name: dockersock
+          hostPath:
+            path: /var/run/docker.sock
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+spec:
+  ports:
+    - name: web
+      nodePort: 30001
+      protocol: TCP
+      targetPort: 8080
+      port: 8080
+  selector:
+    name: jenkins
+  type: NodePort
+---
+#apiVersion: v1
+#kind: Route
+#metadata:
+#  annotations:
+#    haproxy.router.openshift.io/timeout: 4m
+#    template.openshift.io/expose-uri: http://{.spec.host}{.spec.path}
+#  name: jenkins
+#spec:
+#  tls:
+#    insecureEdgeTerminationPolicy: Redirect
+#    termination: edge
+#  to:
+#    kind: Service
+#    name: jenkins
